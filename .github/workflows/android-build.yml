@@ -19,7 +19,7 @@ jobs:
       with:
         node-version: '18'
 
- - name: Install dependencies
+    - name: Install dependencies
       run: |
         npm install -g cordova
         npm install
