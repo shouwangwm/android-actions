@@ -48,13 +48,18 @@ jobs:
         cordova platform add android@14.0.1
         ls -la platforms/android/
 
+    - name: Prepare Cordova project
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        cordova prepare android
+        ls -la platforms/android/
+
     - name: Build Android app
       run: |
         export ANDROID_HOME=$ANDROID_SDK_ROOT
         export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
-        cd platforms/android
-        ./gradlew cdvBuildDebug --stacktrace
-        ls -la app/build/outputs/apk/debug/
+        cordova build android --debug
+        ls -la platforms/android/app/build/outputs/apk/debug/
 
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
