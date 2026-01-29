@@ -41,6 +41,11 @@ jobs:
       run: |
         sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+    - name: Add Android platform
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        cordova platform add android
+
     - name: Build Android app
       run: |
         export ANDROID_HOME=$ANDROID_SDK_ROOT
