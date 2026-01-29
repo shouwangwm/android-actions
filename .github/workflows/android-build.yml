@@ -19,8 +19,10 @@ jobs:
       with:
         node-version: '18'
 
-    - name: Install dependencies
-      run: npm install
+ - name: Install dependencies
+      run: |
+        npm install -g cordova
+        npm install
 
     - name: Set up JDK
       uses: actions/setup-java@v4
