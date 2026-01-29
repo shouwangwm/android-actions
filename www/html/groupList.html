@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>群组管理</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <!-- 下拉菜单 -->
+    <div id="dropdownWrapper" class="dropdown-wrapper">
+        <div class="dropdown">
+            <button class="dropdown-btn" onclick="toggleDropdown()">
+                <img src="../icon/select.png" alt="菜单" class="dropdown-icon">
+            </button>
+            <!-- 下拉菜单内容 -->
+            <div id="dropdownMenu" class="dropdown-menu hidden">
+                <div class="dropdown-item" onclick="openCreateModal()"><img src="../icon/create.png" alt="创建群组" class="dropdown-icon-small"> 创建群组</div>
+                <div class="dropdown-item" onclick="goToUserPage()"><img src="../icon/account.png" alt="账户管理" class="dropdown-icon-small"> 账户管理</div>
+                <div class="dropdown-item red-item" onclick="logout()"><img src="../icon/exit.png" alt="退出" class="dropdown-icon-small"> 退出</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="header">
+        <div class="header-left">
+            <!-- 去掉未连接显示 -->
+        </div>
+        <div class="header-center">
+            <h2>群组管理</h2>
+        </div>
+    </div>
+    
+    <div class="user-info">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-weight: 600;">当前用户:</span>
+            <div class="user-avatar-small" id="userAvatar"></div>
+            <span id="currentUser"></span>
+        </div>
+
+    </div>
+    
+    <!-- 创建群组弹窗 -->
+    <div id="createGroupModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeCreateModal()">&times;</span>
+            <h3>创建群组</h3>
+            <div class="modal-body">
+                <input type="text" id="createGroupName" placeholder="群组名称">
+                <button class="btn" onclick="createGroup()">创建</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 群组选择界面 -->
+    <div id="groupSelection" class="group-selection">
+        <div class="group-list" id="groupList">
+            <!-- 群组列表将在这里动态生成 -->
+        </div>
+    </div>
+    
+    <script src="../js/common.js"></script>
+    <script>
+        // 检查会话是否已有登录信息
+        const savedUsername = sessionStorage.getItem('messageAppUsername');
+        const savedUserId = sessionStorage.getItem('messageAppUserId');
+        const savedNickname = sessionStorage.getItem('messageAppNickname');
+        if (!savedUsername || !savedUserId || !savedNickname) {
+            window.location.href = 'index.html';
+        }
+        
+        // 设置当前用户昵称
+        document.getElementById('currentUser').textContent = savedNickname;
+        currentNickname = savedNickname;
+        
+        // 获取用户信息（包括头像）
+        async function getUserInfo() {
+            try {
+                const response = await fetch(`/api/user?userId=${savedUserId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const user = result.data;
+                    // 显示用户头像
+                    const userAvatar = document.getElementById('userAvatar');
+                    if (userAvatar) {
+                        if (user.avatar) {
+                            userAvatar.innerHTML = `<img src="${user.avatar}" alt="头像" style="width: 100%; height: 100%; border-radius: 50%;">`;
+                        } else {
+                            userAvatar.innerHTML = '<img src="../icon/no_icon.png" alt="默认头像" style="width: 100%; height: 100%; border-radius: 50%;">';
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('获取用户信息失败:', error);
+            }
+        }
+        
+        // 获取用户信息
+        getUserInfo();
+        
+        // 格式化时间
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString();
+        }
+        
+        // 更新群组列表
+        function updateGroupsList(groups) {
+            console.log('开始更新群组列表，群组数量:', groups.length);
+            console.log('群组数据:', groups);
+            
+            const groupList = document.getElementById('groupList');
+            groupList.innerHTML = '';
+            
+            if (groups.length === 0) {
+                console.log('群组列表为空');
+                groupList.innerHTML = '<p>暂无群组</p>';
+                return;
+            }
+            
+            groups.forEach((group, index) => {
+                console.log('处理群组 ' + index + ':', group);
+                console.log('群组名称:', group.name);
+                const groupItem = document.createElement('div');
+                groupItem.className = 'group-item';
+                
+                let actionsHtml = '';
+                actionsHtml += `<button class="btn small-btn green-btn" onclick="enterGroup('${group.groupId}', '${group.name}')">进入</button>`;
+                actionsHtml += `<button class="btn small-btn red-btn" onclick="deleteGroup('${group.groupId}')">删除</button>`;
+                
+                // 直接在HTML中硬编码一个测试名称，看看是否显示
+                const testGroupName = group.name || '测试群组名称';
+                console.log('使用的群组名称:', testGroupName);
+                
+                // 直接硬编码群组名称，确保显示
+                const groupHtml = `
+                    <div style="padding: 15px; border: 1px solid #e9ecef; border-radius: 12px; margin-bottom: 10px; background: white;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <div style="font-size: 18px; font-weight: 700; color: #111b21;">${group.name || '未命名群组'}</div>
+                            <div style="display: flex; gap: 10px;">
+                                ${actionsHtml}
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #4a5568;">
+                            <div style="margin: 4px 0;">创建人: ${group.creatorName}</div>
+                            <div style="margin: 4px 0;">创建时间: ${formatTime(group.created_at)}</div>
+                            <div style="margin: 4px 0; color: #8696a0; font-style: italic;">最后活跃: ${formatTime(group.lastActiveTime)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                console.log('生成的群组HTML:', groupHtml);
+                groupItem.innerHTML = groupHtml;
+                
+                groupList.appendChild(groupItem);
+            });
+            
+            console.log('群组列表更新完成');
+        }
+        
+        // 获取群组列表
+        async function getGroupsList() {
+            const startTime = performance.now();
+            console.log('开始获取群组列表...');
+            try {
+                const fetchStartTime = performance.now();
+                const response = await fetch('/api/groups', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Client-Id': clientId
+                    }
+                });
+                const fetchEndTime = performance.now();
+                console.log('获取群组列表响应时间:', fetchEndTime - fetchStartTime, 'ms');
+                console.log('获取群组列表响应:', response);
+                
+                if (!response.ok) {
+                    throw new Error('获取群组列表失败');
+                }
+                
+                const parseStartTime = performance.now();
+                const data = await response.json();
+                const parseEndTime = performance.now();
+                console.log('解析响应数据时间:', parseEndTime - parseStartTime, 'ms');
+                console.log('获取群组列表数据:', data);
+                
+                if (data.success) {
+                    console.log('群组列表:', data.groups);
+                    const updateStartTime = performance.now();
+                    updateGroupsList(data.groups);
+                    const updateEndTime = performance.now();
+                    console.log('更新群组列表时间:', updateEndTime - updateStartTime, 'ms');
+                } else {
+                    alert(`错误: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('获取群组列表出错:', error);
+                alert('获取群组列表失败，请稍后重试');
+            } finally {
+                const endTime = performance.now();
+                console.log('获取群组列表总耗时:', endTime - startTime, 'ms');
+            }
+        }
+        
+        // 创建群组
+        async function createGroup() {
+            const groupName = document.getElementById('createGroupName').value.trim();
+            if (!groupName) {
+                alert('请输入群组名称');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/groups', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Client-Id': clientId
+                    },
+                    body: JSON.stringify({ 
+                        name: groupName,
+                        userId: savedUserId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('创建群组失败');
+                }
+                
+                const data = await response.json();
+                if (data.success) {
+                    // 关闭创建群组弹窗
+                    closeCreateModal();
+                    // 重新获取群组列表
+                    getGroupsList();
+                } else {
+                    alert(`错误: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('创建群组出错:', error);
+                alert('创建群组失败，请稍后重试');
+            }
+        }
+        
+        // 进入群组
+        function enterGroup(groupId, groupName) {
+            window.location.href = `./chat.html?groupId=${encodeURIComponent(groupId)}&groupName=${encodeURIComponent(groupName)}&nickname=${encodeURIComponent(currentNickname)}`;
+        }
+        
+        // 删除群组
+        async function deleteGroup(groupId) {
+            if (confirm('确定要删除这个群组吗？')) {
+                try {
+                    const response = await fetch(`/api/groups/${groupId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Client-Id': clientId
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('删除群组失败');
+                    }
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        // 重新获取群组列表
+                        getGroupsList();
+                    } else {
+                        alert(`错误: ${data.message}`);
+                    }
+                } catch (error) {
+                    console.error('删除群组出错:', error);
+                    alert('删除群组失败，请稍后重试');
+                }
+            }
+        }
+        
+        // 页面切换时清理资源
+        function cleanupResources() {
+            // 清理群组列表
+            const groupList = document.getElementById('groupList');
+            if (groupList) {
+                groupList.innerHTML = '';
+            }
+            
+            // 关闭所有弹窗
+            closeCreateModal();
+            
+            console.log('✅ 群组列表页面资源已清理');
+        }
+        
+        // 初始化
+        function init() {
+            // 获取群组列表
+            getGroupsList();
+        }
+        
+        // 跳转到账户管理页面
+        function goToUserPage() {
+            cleanupResources();
+            window.location.href = 'user.html';
+        }
+        
+        // 切换下拉菜单
+        function toggleDropdown() {
+            const menu = document.getElementById('dropdownMenu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+            }
+        }
+        
+        // 点击页面其他地方关闭下拉菜单
+        document.addEventListener('click', (event) => {
+            const dropdown = document.querySelector('.dropdown');
+            const menu = document.getElementById('dropdownMenu');
+            if (dropdown && !dropdown.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+        
+        // 退出登录
+        function logout() {
+            // 清空会话存储
+            sessionStorage.removeItem('messageAppUsername');
+            sessionStorage.removeItem('messageAppUserId');
+            sessionStorage.removeItem('messageAppNickname');
+            // 清理资源
+            cleanupResources();
+            // 回到登录页面
+            window.location.href = '../index.html';
+        }
+        
+
+        
+        // 打开创建群组弹窗
+        function openCreateModal() {
+            const modal = document.getElementById('createGroupModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        }
+        
+        // 关闭创建群组弹窗
+        function closeCreateModal() {
+            const modal = document.getElementById('createGroupModal');
+            const input = document.getElementById('createGroupName');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+            if (input) {
+                input.value = '';
+            }
+        }
+        
+        // 点击弹窗外部关闭弹窗
+        window.addEventListener('click', (event) => {
+            const modal = document.getElementById('createGroupModal');
+            if (event.target === modal) {
+                closeCreateModal();
+            }
+        });
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', init);
+        
+        // 页面卸载前清理资源
+        window.addEventListener('beforeunload', cleanupResources);
+        
+        // 页面隐藏时清理资源
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                cleanupResources();
+            }
+        });
+    </script>
+</body>
+</html>

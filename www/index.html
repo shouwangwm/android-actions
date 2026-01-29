@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; connect-src *">
+    <title>登录</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="cordova.js"></script>
+</head>
+<body>
+    <!-- 登录界面 -->
+    <div class="login-container">
+        <div class="login-form">
+            <h2>通信工具</h2>
+            <div class="login-body">
+                <input type="text" id="usernameInput" placeholder="请输入用户名">
+                <input type="password" id="passwordInput" placeholder="请输入密码">
+                <button class="btn login-btn" onclick="login()">登录</button>
+                <button class="btn register-btn" onclick="openRegisterModal()">注册账号</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 注册弹窗 -->
+    <div id="registerModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeRegisterModal()">&times;</span>
+            <h3>注册新账号</h3>
+            <div class="modal-body">
+                <div class="avatar-upload">
+                    <div class="avatar-preview" id="registerAvatarPreview">
+                        <img src="" alt="头像预览" class="avatar-image">
+                    </div>
+                    <input type="file" id="registerAvatar" accept="image/*" class="avatar-input">
+                    <label for="registerAvatar" class="avatar-label">选择头像</label>
+                </div>
+                <input type="text" id="registerUsername" placeholder="用户名">
+                <input type="password" id="registerPassword" placeholder="密码">
+                <input type="text" id="registerNickname" placeholder="昵称">
+                <button class="btn" onclick="register()">注册</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 头像数据
+        let registerAvatarData = '';
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            // 从会话存储获取保存的用户名
+            const savedUsername = sessionStorage.getItem('messageAppUsername');
+            if (savedUsername) {
+                document.getElementById('usernameInput').value = savedUsername;
+            }
+            
+            // 为头像输入框添加事件监听器
+            const avatarInput = document.getElementById('registerAvatar');
+            if (avatarInput) {
+                avatarInput.addEventListener('change', handleAvatarChange);
+            }
+        });
+        
+        // 处理头像上传
+        function handleAvatarChange(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const avatarData = event.target.result;
+                
+                // 创建图片对象检查尺寸
+                const img = new Image();
+                img.onload = function() {
+                    const maxSize = 200;
+                    if (img.width > maxSize || img.height > maxSize) {
+                        alert(`头像尺寸不能超过 ${maxSize}x${maxSize} 像素`);
+                        // 清空输入
+                        document.getElementById('registerAvatar').value = '';
+                        return;
+                    }
+                    
+                    // 尺寸符合要求，保存头像数据
+                    registerAvatarData = avatarData;
+                    
+                    // 更新头像预览
+                    const preview = document.getElementById('registerAvatarPreview');
+                    const previewImg = preview.querySelector('img');
+                    if (previewImg) {
+                        previewImg.src = avatarData;
+                        preview.style.display = 'block';
+                    }
+                };
+                img.src = avatarData;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // 登录函数
+        async function login() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value.trim();
+            
+            if (!username || !password) {
+                alert('请输入用户名和密码');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 保存登录信息到会话存储
+                    sessionStorage.setItem('messageAppUsername', username);
+                    sessionStorage.setItem('messageAppUserId', result.userId);
+                    sessionStorage.setItem('messageAppNickname', result.nickname);
+                    sessionStorage.setItem('messageAppRole', result.role);
+                    
+                    // 跳转到群组列表页面
+                    window.location.href = 'html/groupList.html';
+                } else {
+                    alert(`登录失败: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('登录请求失败:', error);
+                alert('登录失败，请稍后重试');
+            }
+        }
+        
+        // 打开注册弹窗
+        function openRegisterModal() {
+            const modal = document.getElementById('registerModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        }
+        
+        // 关闭注册弹窗
+        function closeRegisterModal() {
+            const modal = document.getElementById('registerModal');
+            const usernameInput = document.getElementById('registerUsername');
+            const passwordInput = document.getElementById('registerPassword');
+            const nicknameInput = document.getElementById('registerNickname');
+            const avatarInput = document.getElementById('registerAvatar');
+            const avatarPreview = document.getElementById('registerAvatarPreview');
+            
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+            if (usernameInput) usernameInput.value = '';
+            if (passwordInput) passwordInput.value = '';
+            if (nicknameInput) nicknameInput.value = '';
+            if (avatarInput) avatarInput.value = '';
+            
+            // 清空头像数据和预览
+            registerAvatarData = '';
+            if (avatarPreview) {
+                const img = avatarPreview.querySelector('img');
+                if (img) {
+                    img.src = '';
+                }
+                avatarPreview.style.display = 'none';
+            }
+        }
+        
+        // 注册新账号
+        async function register() {
+            const username = document.getElementById('registerUsername').value.trim();
+            const password = document.getElementById('registerPassword').value.trim();
+            const nickname = document.getElementById('registerNickname').value.trim();
+            
+            if (!username || !password || !nickname) {
+                alert('请填写所有字段');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password, nickname, avatar: registerAvatarData })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('注册成功！请使用新账号登录');
+                    closeRegisterModal();
+                } else {
+                    alert(`注册失败: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('注册请求失败:', error);
+                alert('注册失败，请稍后重试');
+            }
+        }
+        
+        // 回车登录
+        document.getElementById('passwordInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+        
+        // 点击弹窗外部关闭弹窗
+        window.addEventListener('click', (event) => {
+            const registerModal = document.getElementById('registerModal');
+            if (event.target === registerModal) {
+                closeRegisterModal();
+            }
+        });
+        
+        // 等待Cordova加载完成
+        document.addEventListener('deviceready', onDeviceReady, false);
+        
+        function onDeviceReady() {
+            console.log('Cordova is ready!');
+        }
+    </script>
+</body>
+</html>

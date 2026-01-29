@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.message.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>MessageApp</name>
+    <description>
+        A messaging app with WebSocket support, allowing users to send text, image, and voice messages.
+    </description>
+    <author email="you@example.com" href="http://example.com">
+        Your Name
+    </author>
+    <content src="index.html" />
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <platform name="android">
+        <icon src="www/icon/no_icon.png" density="ldpi" />
+        <icon src="www/icon/no_icon.png" density="mdpi" />
+        <icon src="www/icon/no_icon.png" density="hdpi" />
+        <icon src="www/icon/no_icon.png" density="xhdpi" />
+    </platform>
+</widget>

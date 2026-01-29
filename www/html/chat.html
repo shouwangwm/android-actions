@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>聊天界面</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <!-- 下拉菜单 - 放到body直接子元素中，避免容器层级限制 -->
+    <div id="dropdownWrapper" class="dropdown-wrapper">
+        <div class="dropdown">
+            <button class="dropdown-btn" onclick="toggleDropdown()">
+                <img src="../icon/select.png" alt="菜单" class="dropdown-icon">
+            </button>
+            <!-- 下拉菜单内容 -->
+            <div id="dropdownMenu" class="dropdown-menu hidden">
+                <div class="dropdown-item" onclick="showMembersList()"><img src="../icon/account.png" alt="成员" class="dropdown-icon-small"> 成员</div>
+        <div class="dropdown-item red-item" onclick="backToGroups()"><img src="../icon/back.png" alt="返回" class="dropdown-icon-small"> 返回</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 聊天界面 -->
+    <div id="chatInterface" class="chat-interface">
+        <div class="chat-header">
+            <div class="header-left">
+                <span id="connectionStatus" class="connection-status">未连接</span>
+            </div>
+            <div class="header-center">
+                <h2 id="currentGroupName">聊天</h2>
+            </div>
+            <div class="header-right" style="margin-left: auto;">
+                <!-- 这里只保留下拉按钮的占位符，实际功能由body下的下拉菜单提供 -->
+            </div>
+        </div>
+        
+        <!-- 群成员列表弹窗 -->
+    <div id="membersModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeMembersModal()">&times;</span>
+            <h3>群成员</h3>
+            <div id="membersList" class="members-list">
+                <!-- 成员列表将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- 图片预览弹窗 -->
+    <div id="imagePreviewModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 90vw; max-height: 90vh; padding: 10px;">
+            <span class="close" onclick="closeImagePreviewModal()">&times;</span>
+            <div style="display: flex; justify-content: center; align-items: center; min-height: 80vh;">
+                <img id="previewImage" src="" alt="预览图片" style="max-width: 100%; max-height: 80vh;" />
+            </div>
+        </div>
+    </div>
+        
+        <div class="media-preview hidden" id="mediaPreview"></div>
+        
+        <div class="messages" id="messages">
+            <!-- 消息将在这里动态生成 -->
+        </div>
+        
+        <div class="input-area">
+            <input type="file" id="imageInput" accept="image/*" class="hidden">
+            <div class="input-container">
+                <textarea class="input-box" id="messageInput" placeholder="输入消息..."></textarea>
+                <div class="input-actions">
+                    <button class="icon-btn image-btn" onclick="document.getElementById('imageInput').click()" title="图片">
+                        <img src="../icon/image.png" alt="图片" class="action-icon">
+                    </button>
+                    <button class="icon-btn voice-btn" id="recordBtn" onclick="toggleRecord()" title="语音">
+                        <img src="../icon/voice.png" alt="语音" class="action-icon">
+                    </button>
+                    <button class="icon-btn" onclick="sendMessage()" title="发送">
+                        <img src="../icon/send.png" alt="发送" class="action-icon">
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="../js/protobuf.min.js"></script>
+    <script src="../js/common.js"></script>
+    <script>
+        // 返回群组列表页面
+        function backToGroups() {
+            // 离开群组
+            if (currentGroup && ws && ws.readyState === WebSocket.OPEN) {
+                sendToServer({
+                    type: 'leaveGroup',
+                    data: {
+                        groupId: currentGroup.groupId
+                    }
+                });
+            }
+            window.location.href = './groupList.html';
+        }
+        
+        // 发送消息
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            
+            if (!content && !mediaPreview) return;
+            if (!currentGroup) {
+                alert('请先加入一个群组');
+                return;
+            }
+            
+            let messageContent;
+            let messageType;
+            let messageDuration;
+            let originalFile;
+            
+            if (mediaPreview) {
+                // 使用预览中的媒体数据
+                messageType = mediaPreview.data.type;
+                messageContent = mediaPreview.data.content;
+                messageDuration = mediaPreview.data.duration;
+                originalFile = mediaPreview.data.originalFile; // 获取原始文件
+                clearMediaPreview();
+            } else {
+                messageType = 'text';
+                messageContent = content;
+                input.value = '';
+            }
+            
+            // 准备发送到服务器的消息
+            const messageToSend = {
+                type: 'message',
+                data: {
+                    groupId: currentGroup.groupId
+                },
+                content: messageContent,
+                messageType: messageType,
+                originalFile: originalFile, // 添加原始文件
+                senderId: sessionStorage.getItem('messageAppUserId'), // 添加senderId
+                senderNickname: currentNickname // 添加senderNickname
+            };
+            
+            if (messageDuration) {
+                messageToSend.duration = messageDuration;
+            }
+            
+            // 创建显示在本地的消息
+            const localMessage = {
+                id: Date.now(),
+                senderId: sessionStorage.getItem('messageAppUserId'), // 使用userId作为senderId
+                senderNickname: currentNickname,
+                type: messageType,
+                content: messageContent,
+                timestamp: new Date().toISOString(),
+                sent: true
+            };
+            
+            // 添加发送者头像信息（如果有）
+            const savedAvatar = sessionStorage.getItem('messageAppAvatar');
+            if (savedAvatar) {
+                localMessage.senderAvatar = savedAvatar;
+            }
+            
+            if (messageDuration) {
+                localMessage.duration = messageDuration;
+            }
+            
+            // 保存并发送消息
+            addMessage(localMessage);
+            sendToServer(messageToSend);
+        }
+        
+        // 处理收到的消息
+        function handleMessage(message) {
+            switch (message.type) {
+                case 'system':
+                    // 系统消息处理
+                    addSystemMessage(message.content);
+                    break;
+                
+                case 'message':
+                    // 聊天消息处理
+                    // 不显示自己发送的消息
+                    const currentUserId = sessionStorage.getItem('messageAppUserId');
+                    if (message.senderId !== currentUserId) {
+                        addMessage(message);
+                    }
+                    break;
+                
+                case 'recallMessage':
+                    // 处理撤回消息
+                    console.log('收到撤回消息:', message);
+                    const messageId = message.data.messageId;
+                    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+                    if (messageElement) {
+                        // 更新消息为已撤回状态
+                        const bubbleDiv = messageElement.querySelector('.message-bubble');
+                        if (bubbleDiv) {
+                            // 清空原有内容
+                            bubbleDiv.innerHTML = '';
+                            
+                            // 创建撤回提示
+                            const recallDiv = document.createElement('div');
+                            recallDiv.className = 'message-recalled';
+                            recallDiv.textContent = '消息已撤回';
+                            
+                            bubbleDiv.appendChild(recallDiv);
+                        }
+                        
+                        // 移除长按菜单事件
+                        messageElement.oncontextmenu = null;
+                    }
+                    break;
+                
+                case 'error':
+                    // 错误消息处理
+                    alert(`错误: ${message.content}`);
+                    break;
+                
+                case 'loginSuccess':
+                    // 登录成功，加入群组
+                    console.log('登录成功:', message);
+                    
+                    // 存储用户头像信息到sessionStorage
+                    if (message.avatar) {
+                        sessionStorage.setItem('messageAppAvatar', message.avatar);
+                        console.log('用户头像已存储到sessionStorage');
+                    }
+                    
+                    // 从URL参数获取群组信息
+                    const params = getUrlParams();
+                    if (params.groupId) {
+                        console.log('URL中包含聊天参数，加入群组:', params);
+                        currentGroup = {
+                            groupId: params.groupId,
+                            name: params.groupName || params.groupId,
+                            clientCount: 1
+                        };
+                        
+                        // 更新header中间的群组名称
+                        const groupNameElement = document.getElementById('currentGroupName');
+                        if (groupNameElement) {
+                            groupNameElement.textContent = currentGroup.name;
+                        }
+                        
+                        // 加入群组
+                        sendToServer({
+                            type: 'joinGroup',
+                            data: {
+                                groupId: params.groupId,
+                                nickname: currentNickname
+                            }
+                        });
+                        
+                        // 主动请求成员列表，确保能获取到最新的成员列表
+                        sendToServer({
+                            type: 'getGroupMembers',
+                            data: {
+                                groupId: params.groupId
+                            }
+                        });
+                    } else {
+                        // 没有URL参数，返回群组列表
+                        backToGroups();
+                    }
+                    break;
+                
+                case 'loginError':
+                    // 登录失败，返回登录页面
+                    console.error('登录失败:', message);
+                    alert(`登录失败: ${message.content}`);
+                    window.location.href = '../index.html';
+                    break;
+                
+                case 'groupMembers':
+                    // 更新群成员列表
+                    updateMembersList(message.data.members);
+                    // 更新当前群组的成员数量
+                    if (currentGroup && message.data.groupId === currentGroup.groupId) {
+                        currentGroup.clientCount = message.data.members.length;
+                        // 更新聊天界面的成员数量显示
+                        const memberBtn = document.getElementById('memberCountBtn');
+                        if (memberBtn) {
+                            memberBtn.innerHTML = `成员 ${currentGroup.clientCount}`;
+                        }
+                        console.log('成员列表更新:', message.data.members);
+                    }
+                    break;
+                
+                default:
+                    console.log('⚠️  未知消息类型，跳过显示:', message);
+            }
+        }
+        
+        // 检查登录状态
+        function checkLoginStatus() {
+            // 从会话存储获取登录信息
+            const savedUsername = sessionStorage.getItem('messageAppUsername');
+            const savedUserId = sessionStorage.getItem('messageAppUserId');
+            const savedNickname = sessionStorage.getItem('messageAppNickname');
+            
+            console.log('检查登录状态:', {
+                savedUsername,
+                savedUserId,
+                savedNickname
+            });
+            
+            // 从URL参数获取信息
+            const params = getUrlParams();
+            const urlNickname = params.nickname;
+            
+            // 检查登录状态
+            if (!savedUsername || !savedUserId || !savedNickname) {
+                // 没有登录信息，返回登录页面
+                alert('请先登录');
+                window.location.href = '../index.html';
+                return false;
+            }
+            
+            // 使用会话存储中的昵称或URL参数中的昵称
+            currentNickname = urlNickname || savedNickname;
+            console.log('使用的昵称:', currentNickname);
+            return true;
+        }
+        
+        // WebSocket连接成功回调
+        function onConnect() {
+            // 检查登录状态
+            if (!checkLoginStatus()) {
+                return;
+            }
+            
+            // 从会话存储获取登录信息
+            const savedUsername = sessionStorage.getItem('messageAppUsername');
+            const savedUserId = sessionStorage.getItem('messageAppUserId');
+            const savedNickname = sessionStorage.getItem('messageAppNickname');
+            
+            console.log('WebSocket连接成功，准备登录:', {
+                savedUsername,
+                savedUserId,
+                savedNickname
+            });
+            
+            // 先发送登录消息，确保服务器端有userId
+            sendToServer({
+                type: 'login',
+                data: {
+                    username: savedUsername,
+                    password: '' // 密码为空，因为我们已经通过sessionStorage验证了登录状态
+                }
+            });
+        }
+        
+        // 切换下拉菜单
+        function toggleDropdown() {
+            const menu = document.getElementById('dropdownMenu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+            }
+        }
+        
+        // 点击页面其他地方关闭下拉菜单
+        document.addEventListener('click', (event) => {
+            const dropdown = document.querySelector('.dropdown');
+            const menu = document.getElementById('dropdownMenu');
+            if (dropdown && !dropdown.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+        
+        // 页面切换时清理资源
+        function cleanupResources() {
+            // 移除事件监听器
+            removeBeforeUnload();
+            removeEnterSend();
+            removeAutoResizeInput();
+            
+            // 清理媒体预览
+            clearMediaPreview();
+            
+            // 清理音频资源
+            document.querySelectorAll('.voice-player').forEach(player => {
+                if (player.audio) {
+                    player.audio.pause();
+                    player.audio.currentTime = 0;
+                    player.audio = null;
+                    player.onclick = null;
+                }
+            });
+            
+            // 清理图片资源
+            document.querySelectorAll('.message-image').forEach(img => {
+                img.src = '';
+                img.onclick = null;
+            });
+            
+            // 清理消息列表
+            const messagesDiv = document.getElementById('messages');
+            if (messagesDiv) {
+                messagesDiv.innerHTML = '';
+            }
+            
+            console.log('✅ 页面资源已清理');
+        }
+        
+        // 关闭图片预览弹窗
+        function closeImagePreviewModal() {
+            const modal = document.getElementById('imagePreviewModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+        
+        // 初始化
+        function init() {
+            // 初始化WebSocket连接
+            initWebSocket(onConnect, handleMessage);
+            
+            // 设置图片输入处理
+            setupImageInput();
+            
+            // 设置回车发送功能
+            setupEnterSend(sendMessage);
+            
+            // 设置模态框点击外部关闭
+            setupModalClose();
+            
+            // 设置页面关闭前清理
+            setupBeforeUnload();
+            
+            // 设置输入框自动调整高度
+            setupAutoResizeInput();
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', init);
+        
+        // 页面卸载前清理资源
+        window.addEventListener('beforeunload', cleanupResources);
+        
+        // 页面隐藏时清理资源（用于SPA单页应用或浏览器标签页切换）
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // 页面隐藏时清理资源
+                cleanupResources();
+            }
+        });
+    </script>
+</body>
+</html>

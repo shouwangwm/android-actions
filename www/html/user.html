@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>聊天365 - 账户管理</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <!-- 下拉菜单 -->
+    <div id="dropdownWrapper" class="dropdown-wrapper">
+        <div class="dropdown">
+            <button class="dropdown-btn" onclick="toggleDropdown()">
+                <img src="../icon/select.png" alt="菜单" class="dropdown-icon">
+            </button>
+            <!-- 下拉菜单内容 -->
+            <div id="dropdownMenu" class="dropdown-menu hidden">
+                <div class="dropdown-item" onclick="goBack()"><img src="../icon/back.png" alt="返回群组" class="dropdown-icon-small"> 返回群组</div>
+                <div class="dropdown-item red-item" onclick="logout()"><img src="../icon/exit.png" alt="退出" class="dropdown-icon-small"> 退出</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="header">
+        <div class="header-left">
+            <!-- 去掉未连接显示 -->
+        </div>
+        <div class="header-center">
+            <h2>账户管理</h2>
+        </div>
+
+    </div>
+    
+    <div class="user-info">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-weight: 600;">当前用户:</span>
+            <div class="user-avatar-small" id="userAvatar"></div>
+            <span id="currentUser"></span>
+        </div>
+
+    </div>
+    
+
+    
+    <!-- 更新账户弹窗 -->
+    <div id="updateModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeUpdateModal()">&times;</span>
+            <h3>更新账户信息</h3>
+            <div class="modal-body">
+                <div class="avatar-upload">
+                    <div class="avatar-preview" id="updateAvatarPreview">
+                        <img src="" alt="头像预览" class="avatar-image">
+                    </div>
+                    <input type="file" id="updateAvatar" accept="image/*" class="avatar-input">
+                    <label for="updateAvatar" class="avatar-label">选择头像（可选）</label>
+                </div>
+                <input type="password" id="updatePassword" placeholder="新密码（可选）">
+                <input type="text" id="updateNickname" placeholder="新昵称（可选）">
+                <button class="btn green-btn" onclick="updateUser()">更新</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 账户管理界面 -->
+    <div class="user-management">
+        <div class="user-list-section">
+            <h3>账户列表</h3>
+            <div class="user-list" id="userList">
+                <!-- 账户列表将在这里动态生成 -->
+                <p>加载中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentUser = null;
+        let updateAvatarData = '';
+        
+        // 检查会话是否已有登录信息
+        const savedUsername = sessionStorage.getItem('messageAppUsername');
+        const savedUserId = sessionStorage.getItem('messageAppUserId');
+        if (!savedUsername || !savedUserId) {
+            window.location.href = 'index.html';
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            // 为头像输入框添加事件监听器
+            const avatarInput = document.getElementById('updateAvatar');
+            if (avatarInput) {
+                avatarInput.addEventListener('change', handleAvatarChange);
+            }
+        });
+        
+        // 处理头像上传
+        function handleAvatarChange(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const avatarData = event.target.result;
+                
+                // 创建图片对象检查尺寸
+                const img = new Image();
+                img.onload = function() {
+                    const maxSize = 200;
+                    if (img.width > maxSize || img.height > maxSize) {
+                        alert(`头像尺寸不能超过 ${maxSize}x${maxSize} 像素`);
+                        // 清空输入
+                        document.getElementById('updateAvatar').value = '';
+                        return;
+                    }
+                    
+                    // 尺寸符合要求，保存头像数据
+                    updateAvatarData = avatarData;
+                    
+                    // 更新头像预览
+                    const preview = document.getElementById('updateAvatarPreview');
+                    const previewImg = preview.querySelector('img');
+                    if (previewImg) {
+                        previewImg.src = avatarData;
+                        preview.style.display = 'block';
+                    }
+                };
+                img.src = avatarData;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // 格式化时间
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString();
+        }
+        
+        // 更新用户信息显示
+        function updateUserInfo(user) {
+            currentUser = user;
+            document.getElementById('currentUser').textContent = user.nickname;
+            
+            // 更新用户头像
+            const userAvatar = document.getElementById('userAvatar');
+            if (userAvatar) {
+                if (user.avatar) {
+                    userAvatar.innerHTML = `<img src="${user.avatar}" alt="头像">`;
+                } else {
+                    userAvatar.innerHTML = '<img src="../icon/no_icon.png" alt="默认头像">';
+                }
+            }
+            
+            // 根据用户角色显示不同的界面
+            if (user.role === 'admin') {
+                // 管理员可以查看所有用户列表
+                document.querySelector('.user-list-section').style.display = 'block';
+                // 刷新用户列表
+                refreshUserList();
+            } else {
+                // 普通用户只能查看自己的信息
+                document.querySelector('.user-list-section').style.display = 'block';
+                // 显示自己的账户信息
+                showOwnUserInfo(user);
+            }
+        }
+        
+        // 显示自己的账户信息
+        function showOwnUserInfo(user) {
+            const userList = document.getElementById('userList');
+            if (!userList) return;
+            
+            userList.innerHTML = '';
+            
+            const userItem = document.createElement('div');
+            userItem.className = 'user-item';
+            
+            // 头像HTML
+            const avatarHtml = user.avatar ? 
+                `<div class="user-avatar"><img src="${user.avatar}" alt="头像"></div>` : 
+                `<div class="user-avatar"><img src="../icon/no_icon.png" alt="默认头像"></div>`;
+            
+            userItem.innerHTML = `
+                <div class="user-item-content">
+                    <div class="user-item-info">
+                        ${avatarHtml}
+                        <h4>${user.username}</h4>
+                        <p>昵称: ${user.nickname}</p>
+                        <p class="user-register-time">注册时间: ${formatTime(user.created_at)}</p>
+                    </div>
+                    <div class="user-item-actions">
+                        <button class="btn small-btn orange-btn" onclick="editUser('${user.id}', '${user.username}', '${user.nickname}')">修改</button>
+                    </div>
+                </div>
+            `;
+            
+            userList.appendChild(userItem);
+        }
+        
+        // 刷新用户列表
+        async function refreshUserList() {
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateUsersList(result.data);
+                } else {
+                    alert(`获取用户列表失败: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('获取用户列表请求失败:', error);
+                alert('获取用户列表失败，请稍后重试');
+            }
+        }
+        
+        // 更新用户列表显示
+        function updateUsersList(users) {
+            const userList = document.getElementById('userList');
+            if (!userList) return;
+            
+            if (users.length === 0) {
+                userList.innerHTML = '<p>暂无已创建的账户</p>';
+                return;
+            }
+            
+            userList.innerHTML = '';
+            
+            users.forEach(user => {
+                const userItem = document.createElement('div');
+                userItem.className = 'user-item';
+                
+                // 头像HTML
+                const avatarHtml = user.avatar ? 
+                    `<div class="user-avatar"><img src="${user.avatar}" alt="头像"></div>` : 
+                    `<div class="user-avatar"><img src="../icon/no_icon.png" alt="默认头像"></div>`;
+                
+                userItem.innerHTML = `
+                    <div class="user-item-content">
+                        <div class="user-item-info">
+                            ${avatarHtml}
+                            <h4>${user.username}</h4>
+                            <p>昵称: ${user.nickname}</p>
+                            <p class="user-register-time">注册时间: ${formatTime(user.created_at)}</p>
+                        </div>
+                        <div class="user-item-actions">
+                            <button class="btn small-btn orange-btn" onclick="editUser('${user.id}', '${user.username}', '${user.nickname}')">修改</button>
+                            <button class="btn small-btn red-btn" onclick="deleteOtherUser('${user.id}', '${user.username}')">删除</button>
+                        </div>
+                    </div>
+                `;
+                
+                userList.appendChild(userItem);
+            });
+        }
+        
+        // 编辑其他用户
+        function editUser(userId, username, nickname) {
+            // 打开更新弹窗，填充用户信息
+            const passwordInput = document.getElementById('updatePassword');
+            const nicknameInput = document.getElementById('updateNickname');
+            
+            // 清空输入框
+            if (passwordInput) passwordInput.value = '';
+            if (nicknameInput) nicknameInput.value = nickname;
+            
+            // 保存当前编辑的用户ID
+            window.currentEditUserId = userId;
+            
+            // 打开更新弹窗
+            const modal = document.getElementById('updateModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        }
+        
+        // 删除其他用户
+        function deleteOtherUser(userId, username) {
+            if (confirm(`确定要删除用户 ${username} 吗？`)) {
+                deleteAccount(userId);
+            }
+        }
+        
+
+        
+        // 更新账户信息
+        async function updateUser() {
+            const password = document.getElementById('updatePassword').value.trim();
+            const nickname = document.getElementById('updateNickname').value.trim();
+            
+            if (!password && !nickname && !updateAvatarData) {
+                alert('请至少填写一个字段');
+                return;
+            }
+            
+            // 确定要更新的用户ID
+            const userId = window.currentEditUserId || savedUserId;
+            
+            try {
+                const response = await fetch('/api/user', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId, password, nickname, avatar: updateAvatarData })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('更新成功！');
+                    closeUpdateModal();
+                    // 重新获取用户信息
+                    getUserInfo();
+                } else {
+                    alert(`更新失败: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('更新请求失败:', error);
+                alert('更新失败，请稍后重试');
+            }
+        }
+        
+        // 删除账户
+        async function deleteAccount(userId = savedUserId) {
+            const isCurrentUser = userId === savedUserId;
+            const confirmMessage = isCurrentUser 
+                ? '确定要删除当前账户吗？此操作不可恢复！'
+                : '确定要删除该账户吗？此操作不可恢复！';
+                
+            if (confirm(confirmMessage)) {
+                try {
+                    const response = await fetch('/api/user', {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ userId })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('账户已删除');
+                        if (isCurrentUser) {
+                            logout();
+                        } else {
+                            // 重新获取用户信息和用户列表
+                            getUserInfo();
+                        }
+                    } else {
+                        alert(`删除失败: ${result.message}`);
+                    }
+                } catch (error) {
+                    console.error('删除请求失败:', error);
+                    alert('删除失败，请稍后重试');
+                }
+            }
+        }
+        
+        // 获取用户信息
+        async function getUserInfo() {
+            try {
+                const response = await fetch(`/api/user?userId=${savedUserId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateUserInfo(result.data);
+                } else {
+                    alert(`获取用户信息失败: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('获取用户信息请求失败:', error);
+                alert('获取用户信息失败，请稍后重试');
+            }
+        }
+        
+
+        
+        // 返回群组列表
+        function goBack() {
+            window.location.href = 'groupList.html';
+        }
+        
+        // 退出登录
+        function logout() {
+            // 清空会话存储
+            sessionStorage.removeItem('messageAppUsername');
+            sessionStorage.removeItem('messageAppUserId');
+            sessionStorage.removeItem('messageAppNickname');
+            sessionStorage.removeItem('messageAppRole');
+            // 回到登录页面
+            window.location.href = '../index.html';
+        }
+        
+
+        
+        // 打开更新弹窗
+        function openUpdateModal() {
+            const modal = document.getElementById('updateModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        }
+        
+        // 关闭更新弹窗
+        function closeUpdateModal() {
+            const modal = document.getElementById('updateModal');
+            const passwordInput = document.getElementById('updatePassword');
+            const nicknameInput = document.getElementById('updateNickname');
+            const avatarInput = document.getElementById('updateAvatar');
+            const avatarPreview = document.getElementById('updateAvatarPreview');
+            
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+            if (passwordInput) passwordInput.value = '';
+            if (nicknameInput) nicknameInput.value = '';
+            if (avatarInput) avatarInput.value = '';
+            
+            // 清空头像数据和预览
+            updateAvatarData = '';
+            if (avatarPreview) {
+                const img = avatarPreview.querySelector('img');
+                if (img) {
+                    img.src = '';
+                }
+                avatarPreview.style.display = 'none';
+            }
+            
+            // 清空当前编辑的用户ID
+            delete window.currentEditUserId;
+        }
+        
+        // 点击弹窗外部关闭弹窗
+        window.addEventListener('click', (event) => {
+            const registerModal = document.getElementById('registerModal');
+            const updateModal = document.getElementById('updateModal');
+            if (event.target === registerModal) {
+                closeRegisterModal();
+            }
+            if (event.target === updateModal) {
+                closeUpdateModal();
+            }
+        });
+        
+        // 切换下拉菜单
+        function toggleDropdown() {
+            const menu = document.getElementById('dropdownMenu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+            }
+        }
+        
+        // 点击页面其他地方关闭下拉菜单
+        document.addEventListener('click', (event) => {
+            const dropdown = document.querySelector('.dropdown');
+            const menu = document.getElementById('dropdownMenu');
+            if (dropdown && !dropdown.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', async function() {
+            // 并行执行获取用户信息和刷新用户列表
+            try {
+                // 获取用户信息
+                await getUserInfo();
+            } catch (error) {
+                console.error('初始化失败:', error);
+            }
+        });
+    </script>
+</body>
+</html>
