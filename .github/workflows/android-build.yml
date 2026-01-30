@@ -91,8 +91,6 @@ jobs:
         find platforms/android -name "gradlew" -type f
         # 检查是否有gradle目录
         ls -la platforms/android/gradle/ 2>/dev/null || echo "No gradle directory"
-        # 检查是否有tools目录
-        ls -la platforms/android/tools/ 2>/dev/null || echo "No tools directory"
         # 尝试重新prepare项目，生成必要文件
         cordova prepare android
         # 再次检查gradlew文件
