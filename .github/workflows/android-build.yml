@@ -80,19 +80,31 @@ jobs:
         cat www/index.html | head -20
         # 尝试使用cordova构建，添加详细输出
         echo "Starting cordova build..."
-        cordova build android --debug --verbose || {
+        # 捕获构建输出
+        BUILD_OUTPUT=$(cordova build android --debug --verbose 2>&1)
+        echo "$BUILD_OUTPUT"
+        # 检查构建是否成功
+        if echo "$BUILD_OUTPUT" | grep -q "BUILD SUCCESS"; then
+          echo "Build successful!"
+        else
           echo "Build failed, checking for specific errors..."
-          # 检查构建日志
-          if [ -d "platforms/android/app/build" ]; then
-            find platforms/android/app/build -name "*.log" | xargs cat 2>/dev/null || echo "No build logs found"
-          fi
-          # 检查是否有APK文件
-          find platforms/android -name "*.apk" | head -10
-        }
-        # 检查构建产物
-        ls -la platforms/android/app/build/outputs/apk/debug/ || echo "No APK directory found"
-        # 检查是否有其他APK文件
-        find platforms/android -name "*.apk" | head -10
+          # 提取错误信息
+          echo "$BUILD_OUTPUT" | grep -A 20 -B 5 "ERROR"
+          echo "$BUILD_OUTPUT" | grep -A 20 -B 5 "FAILURE"
+        fi
+        # 检查构建目录结构
+        echo "Checking build directory structure..."
+        find platforms/android/app/build -type d | sort
+        # 检查是否有APK文件
+        echo "Searching for APK files..."
+        find platforms/android -name "*.apk" -type f
+        # 检查构建输出
+        ls -la platforms/android/app/build/outputs/ || echo "No build outputs directory"
+        ls -la platforms/android/app/build/outputs/apk/ || echo "No APK directory"
+        ls -la platforms/android/app/build/outputs/apk/debug/ || echo "No debug APK directory"
+        # 检查构建日志
+        echo "Checking build logs..."
+        find platforms/android/app/build -name "*.log" | xargs cat 2>/dev/null || echo "No build logs found"
 
     - name: Find and upload APK
       run: |
