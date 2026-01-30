@@ -60,22 +60,27 @@ jobs:
         export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
         # 详细检查Android平台目录结构
         ls -la platforms/android/
+        ls -la platforms/android/tools/
+        # 检查gradlew文件
         find platforms/android -name "gradlew" -type f
-        find platforms/android -name "*.gradle" | head -20
-        # 检查是否存在gradlew文件
-        GRADLEW_PATH=$(find platforms/android -name "gradlew" -type f | head -1)
-        if [ -z "$GRADLEW_PATH" ]; then
-          echo "Error: gradlew file not found"
-          # 尝试使用cordova构建
-          cordova build android --debug --verbose
-        else
-          echo "Found gradlew at: $GRADLEW_PATH"
-          # 运行找到的gradlew
-          cd $(dirname $GRADLEW_PATH)/..
-          ./$(basename $(dirname $GRADLEW_PATH))/gradlew cdvBuildDebug --stacktrace --info --warning-mode=all
+        # 检查gradlew文件权限
+        if [ -f "platforms/android/tools/gradlew" ]; then
+          echo "gradlew file exists"
+          ls -la platforms/android/tools/gradlew
+          # 设置执行权限
+          chmod +x platforms/android/tools/gradlew
+          echo "Permissions after chmod:"
+          ls -la platforms/android/tools/gradlew
         fi
+        # 检查环境变量
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "PATH: $PATH"
+        # 尝试使用cordova构建，添加详细输出
+        cordova build android --debug --verbose
         # 检查构建产物
         ls -la platforms/android/app/build/outputs/apk/debug/ || echo "No APK directory found"
+        # 检查是否有其他APK文件
+        find platforms/android -name "*.apk" | head -10
 
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
