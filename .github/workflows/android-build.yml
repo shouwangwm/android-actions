@@ -57,14 +57,15 @@ jobs:
     - name: Build Android app
       run: |
         export ANDROID_HOME=$ANDROID_SDK_ROOT
-        export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.logging.level=info"
+        export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
         # 检查Android平台目录结构
         ls -la platforms/android/
         ls -la platforms/android/tools/
-        # 运行cordova构建，添加详细输出
-        cordova build android --debug --verbose
+        # 直接运行Gradle构建，添加详细错误输出
+        cd platforms/android
+        ./tools/gradlew cdvBuildDebug --stacktrace --info --warning-mode=all
         # 检查构建产物
-        ls -la platforms/android/app/build/outputs/apk/debug/ || echo "No APK directory found"
+        ls -la app/build/outputs/apk/debug/ || echo "No APK directory found"
 
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
