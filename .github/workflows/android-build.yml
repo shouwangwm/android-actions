@@ -82,12 +82,17 @@ jobs:
         echo "Starting cordova build..."
         # 直接执行构建命令，确保错误信息完整显示
         set -x
-        # 首先检查tools目录中的gradlew文件
-        ls -la platforms/android/tools/
-        # 尝试直接运行Gradle构建
-        cd platforms/android
-        ./tools/gradlew cdvBuildDebug --stacktrace --info --warning-mode=all
-        cd ../..
+        # 检查整个Android平台目录结构，寻找gradlew文件
+        ls -la platforms/android/
+        find platforms/android -name "gradlew" -type f
+        # 检查是否有gradle目录
+        ls -la platforms/android/gradle/ 2>/dev/null || echo "No gradle directory"
+        # 尝试重新prepare项目，生成必要文件
+        cordova prepare android
+        # 再次检查gradlew文件
+        find platforms/android -name "gradlew" -type f
+        # 尝试使用cordova构建命令
+        cordova build android --debug --verbose
         set +x
         # 检查构建目录结构
         echo "Checking build directory structure..."
