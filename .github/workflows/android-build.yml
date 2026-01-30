@@ -82,7 +82,12 @@ jobs:
         echo "Starting cordova build..."
         # 直接执行构建命令，确保错误信息完整显示
         set -x
-        cordova build android --debug --verbose
+        # 首先检查tools目录中的gradlew文件
+        ls -la platforms/android/tools/
+        # 尝试直接运行Gradle构建
+        cd platforms/android
+        ./tools/gradlew cdvBuildDebug --stacktrace --info --warning-mode=all
+        cd ../..
         set +x
         # 检查构建目录结构
         echo "Checking build directory structure..."
